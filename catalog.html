@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Каталог мебели — HomeJoy</title>
+  <meta name="description" content="Каталог мебели HomeJoy: диваны, кровати, столы, стулья и шкафы. Фильтры по категории и цене, сортировка, поиск.">
+  <meta name="theme-color" content="#FFD23F">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HomeJoy">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="Каталог мебели — HomeJoy">
+  <meta property="og:description" content="Каталог мебели HomeJoy: диваны, кровати, столы, стулья и шкафы. Фильтры по категории и цене, сортировка, поиск.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="catalog">
+
+  <div id="site-header"></div>
+
+  <main>
+    <div class="page-head">
+      <div class="container">
+        <h1>Каталог</h1>
+        <p>Выберите мебель для любой комнаты</p>
+      </div>
+    </div>
+
+    <section class="container">
+      <div class="chips" id="filters"></div>
+
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Поиск по названию…" aria-label="Поиск">
+        <div class="toolbar__price" role="group" aria-label="Цена, ₽">
+          <input type="number" id="min" placeholder="Цена от" min="0" step="1000" inputmode="numeric" aria-label="Цена от">
+          <span aria-hidden="true">–</span>
+          <input type="number" id="max" placeholder="до" min="0" step="1000" inputmode="numeric" aria-label="Цена до">
+        </div>
+        <span id="count" class="toolbar__count" aria-live="polite"></span>
+        <select id="sort" aria-label="Сортировка">
+          <option value="default">Сортировка: по умолчанию</option>
+          <option value="asc">Сначала дешёвые</option>
+          <option value="desc">Сначала дорогие</option>
+        </select>
+      </div>
+
+      <div class="products" id="products"></div>
+      <div class="empty" id="empty" hidden>
+        <p>Ничего не найдено. Попробуйте изменить запрос.</p>
+        <button class="btn btn--small" id="reset-filters">Сбросить фильтры</button>
+      </div>
+      <nav class="pager" id="pager" aria-label="Страницы каталога"></nav>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="images.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

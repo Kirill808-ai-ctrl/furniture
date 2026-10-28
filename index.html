@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HomeJoy — интернет-магазин мебели</title>
+  <meta name="description" content="Диваны, кровати, столы, стулья и шкафы из натуральных материалов. Соберите комнату в конструкторе, гарантия до 3 лет, сборка в подарок.">
+  <meta name="theme-color" content="#FFD23F">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HomeJoy">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="HomeJoy — интернет-магазин мебели">
+  <meta property="og:description" content="Диваны, кровати, столы, стулья и шкафы из натуральных материалов. Соберите комнату в конструкторе, гарантия до 3 лет, сборка в подарок.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="home">
+
+  <div id="site-header"></div>
+
+  <main>
+    <section class="hero">
+      <div class="container hero__inner">
+        <div class="hero__text">
+          <span class="sticker">Новая коллекция 2026</span>
+          <h1>Дом, <span class="hl hl--tomato">который</span> <span class="hl">радует</span></h1>
+          <p>Яркая мебель из натуральных материалов. Собери комнату своей мечты прямо здесь — и мы привезём её уже завтра.</p>
+          <div class="hero__actions">
+            <a href="#builder" class="btn btn--lg">Собрать комнату ↓</a>
+            <a href="catalog.html" class="btn btn--lg btn--outline">В каталог</a>
+          </div>
+        </div>
+
+        <div class="hero__art">
+          <div class="hero__card" id="hero-sofa"></div>
+          <svg class="sticker-round" viewBox="0 0 120 120" aria-hidden="true">
+            <defs><path id="circ" d="M60 60m-44 0a44 44 0 1 1 88 0a44 44 0 1 1-88 0"/></defs>
+            <circle cx="60" cy="60" r="57" fill="#FF5A36" stroke="#14110F" stroke-width="3"/>
+            <g class="spin"><text font-size="10" font-weight="800" letter-spacing="1.4" fill="#14110F"><textPath href="#circ">СКИДКА 15% • ПРОМОКОД JOY15 • </textPath></text></g>
+            <text x="60" y="68" text-anchor="middle" font-size="24" font-weight="800" fill="#14110F">−15%</text>
+          </svg>
+          <div class="price-tag">диваны от 49 900 ₽</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container builder" id="builder">
+      <div class="section__head">
+        <div>
+          <span class="eyebrow">Конструктор</span>
+          <h2>Собери свою комнату</h2>
+          <p class="section__sub">Красьте стены, меняйте пол и расставляйте мебель — клик по предмету в комнате меняет модель. Понравилось? Забирайте всё сразу.</p>
+        </div>
+      </div>
+      <div class="builder__stage" id="room"></div>
+      <div class="builder__panel" id="room-panel"></div>
+      <div class="builder__bar" id="room-bar"></div>
+    </section>
+
+    <section class="section container">
+      <div class="section__head">
+        <div>
+          <span class="eyebrow">Выбор по комнатам</span>
+          <h2>Категории</h2>
+        </div>
+      </div>
+      <div class="categories__grid" id="home-categories"></div>
+    </section>
+
+    <section class="section container">
+      <div class="section__head">
+        <div>
+          <span class="eyebrow">Бестселлеры</span>
+          <h2>Популярные товары</h2>
+        </div>
+        <a href="catalog.html" class="link-arrow">Весь каталог →</a>
+      </div>
+      <div class="products" id="featured"></div>
+    </section>
+
+    <section class="container">
+      <div class="promo reveal-block">
+        <div>
+          <span class="sticker sticker--paper">Только для новых клиентов</span>
+          <h2>Скидка 15% на первый заказ</h2>
+          <p>Назовите промокод при оформлении — и получите скидку на любую мебель из каталога.</p>
+          <a href="catalog.html" class="btn btn--light btn--lg">Выбрать мебель</a>
+        </div>
+        <div class="promo__code">JOY15</div>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="assembly" id="assembly"></div>
+    </section>
+
+    <section class="section container">
+      <div class="advantages__grid">
+        <div class="adv reveal-block"><span class="adv__icon">🌳</span><h3>Натуральные материалы</h3><p>Массив дерева и безопасные покрытия.</p></div>
+        <div class="adv reveal-block"><span class="adv__icon">🚚</span><h3>Быстрая доставка</h3><p>Привезём и поднимем на этаж.</p></div>
+        <div class="adv reveal-block"><span class="adv__icon">🛡️</span><h3>Гарантия до 3 лет</h3><p>Заменим или починим бесплатно.</p></div>
+        <div class="adv reveal-block"><span class="adv__icon">🔧</span><h3>Сборка под ключ</h3><p>Мастера соберут мебель за вас.</p></div>
+      </div>
+    </section>
+
+    <section class="section section--sand">
+      <div class="container">
+        <div class="section__head">
+          <div>
+            <span class="eyebrow">Отзывы</span>
+            <h2>Что говорят клиенты</h2>
+          </div>
+        </div>
+        <div class="reviews">
+          <figure class="review reveal-block">
+            <div class="review__stars">★★★★★</div>
+            <blockquote>Заказали диван «Комфорт» — привезли на следующий день, собрали за час. Выглядит дороже своей цены!</blockquote>
+            <figcaption><span class="avatar" style="background:#2B4BFF">А</span><div><strong>Анна</strong><small>Москва</small></div></figcaption>
+          </figure>
+          <figure class="review reveal-block">
+            <div class="review__stars">★★★★★</div>
+            <blockquote>Кровать из массива — мечта. Менеджер помог выбрать размер и ответил на все вопросы.</blockquote>
+            <figcaption><span class="avatar" style="background:#FF5A36">Д</span><div><strong>Дмитрий</strong><small>Казань</small></div></figcaption>
+          </figure>
+          <figure class="review reveal-block">
+            <div class="review__stars">★★★★★</div>
+            <blockquote>Обновили всю кухню: стол и стулья идеально подошли. Спасибо за быструю доставку и аккуратную сборку!</blockquote>
+            <figcaption><span class="avatar" style="background:#7a4a2b">Е</span><div><strong>Елена</strong><small>Санкт-Петербург</small></div></figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="images.js"></script>
+  <script src="script.js"></script>
+  <script src="assembly.js"></script>
+</body>
+</html>

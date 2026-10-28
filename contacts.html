@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Контакты — HomeJoy</title>
+  <meta name="description" content="Адрес, телефон и часы работы магазина мебели HomeJoy. Напишите нам — поможем выбрать мебель.">
+  <meta name="theme-color" content="#FFD23F">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HomeJoy">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="Контакты — HomeJoy">
+  <meta property="og:description" content="Адрес, телефон и часы работы магазина мебели HomeJoy. Напишите нам — поможем выбрать мебель.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="contacts">
+
+  <div id="site-header"></div>
+
+  <main>
+    <div class="page-head">
+      <div class="container">
+        <h1>Контакты</h1>
+        <p>Свяжитесь с нами любым удобным способом</p>
+      </div>
+    </div>
+
+    <section class="container contacts">
+      <div class="contacts__info reveal-block">
+        <h2>Как нас найти</h2>
+        <ul>
+          <li><strong>Адрес</strong>г. Москва, ул. Лесная, д. 10</li>
+          <li><strong>Телефон</strong>+7 (000) 000-00-00</li>
+          <li><strong>Email</strong>info@homejoy.example</li>
+          <li><strong>Часы работы</strong>Ежедневно с 9:00 до 20:00</li>
+        </ul>
+      </div>
+
+      <form class="form reveal-block" id="contact-form">
+        <h2>Напишите нам</h2>
+        <label>Имя
+          <input type="text" name="name" required>
+        </label>
+        <label>Телефон или email
+          <input type="text" name="contact" required>
+        </label>
+        <label>Сообщение
+          <textarea name="message" rows="5" required></textarea>
+        </label>
+        <button class="btn" type="submit">Отправить</button>
+      </form>
+    </section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="images.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

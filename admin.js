@@ -12,6 +12,8 @@
   const state = {
     tab: "orders",
     status: "",
+    expFrom: "", // период выгрузки заказов (ГГГГ-ММ-ДД)
+    expTo: "",
     products: null, // { categories, maxPhotos, items }
     search: "",
     category: "",
@@ -146,6 +148,30 @@
   }
 
   /* ---------- Заказы ---------- */
+  // Скачивание CSV: через fetch, чтобы при закончившейся сессии показать ошибку, а не JSON на экране
+  async function downloadCsv(kind) {
+    const q = new URLSearchParams({ kind });
+    if (state.status) q.set("status", state.status);
+    if (state.expFrom) q.set("from", state.expFrom);
+    if (state.expTo) q.set("to", state.expTo);
+    const res = await fetch("/api/admin/orders.csv?" + q, { headers: { "X-Admin-Request": "1" }, credentials: "same-origin" });
+    if (res.status === 401) {
+      showLogin();
+      throw new Error("Сессия закончилась — войдите снова");
+    }
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Не удалось сформировать файл");
+    const rows = Number(res.headers.get("X-Rows"));
+    if (rows === 0) return toast("За выбранный период заказов нет");
+    const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "")?.[1] || "orders.csv";
+    const url = URL.createObjectURL(await res.blob());
+    const a = Object.assign(document.createElement("a"), { href: url, download: name });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    toast(`Скачано: ${name} (строк: ${rows})`);
+  }
+
   async function drawOrders(body) {
     const data = await api("GET", "/orders" + (state.status ? `?status=${state.status}` : ""));
     const statuses = data.statuses;
@@ -178,7 +204,7 @@
                     <p><b>${esc(o.name)}</b></p>
                     <p><a href="tel:${esc(tel)}">${esc(o.phone)}</a></p>
                     ${o.email ? `<p><a href="mailto:${esc(o.email)}">${esc(o.email)}</a></p>` : ""}
-                    <p>${o.delivery === "courier" ? "🚚 Курьер: " + esc(o.address) : "🏬 Самовывоз"}</p>
+                    <p>${o.delivery === "courier" ? "Курьер: " + esc(o.address) : "Самовывоз"}</p>
                     ${o.comment ? `<p class="adm-order__comment">«${esc(o.comment)}»</p>` : ""}
                   </div>
                   <div>
@@ -195,7 +221,55 @@
           .join("")
       : '<p class="status">Заказов пока нет</p>';
 
-    body.innerHTML = `<div class="chips adm-sub" id="status-chips">${chips}</div><div class="adm-list">${cards}</div>`;
+    const exportCard = `
+      <div class="adm-card adm-export" id="export">
+        <h3>Выгрузка для бухгалтерии</h3>
+        <p class="adm-hint">Файл CSV открывается в Excel. Учитывается выбранный ниже статус: <b>${state.status ? esc(statuses[state.status]) : "все заказы"}</b>.</p>
+        <div class="adm-export__row">
+          <label>С <input type="date" id="exp-from" value="${esc(state.expFrom)}"></label>
+          <label>По <input type="date" id="exp-to" value="${esc(state.expTo)}"></label>
+          <button class="chip" type="button" data-range="month">Этот месяц</button>
+          <button class="chip" type="button" data-range="prev">Прошлый месяц</button>
+          <button class="chip" type="button" data-range="all">За всё время</button>
+        </div>
+        <div class="adm-export__row">
+          <button class="btn btn--small" type="button" data-export="orders">⬇ Заказы — одна строка на заказ</button>
+          <button class="btn btn--small btn--light" type="button" data-export="items">⬇ Позиции — одна строка на товар</button>
+        </div>
+      </div>`;
+
+    body.innerHTML = `${exportCard}<div class="chips adm-sub" id="status-chips">${chips}</div><div class="adm-list">${cards}</div>`;
+
+    const exp = $("#export", body);
+    const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const setRange = (from, to) => {
+      state.expFrom = $("#exp-from", exp).value = from;
+      state.expTo = $("#exp-to", exp).value = to;
+    };
+    exp.addEventListener("change", () => {
+      state.expFrom = $("#exp-from", exp).value;
+      state.expTo = $("#exp-to", exp).value;
+    });
+    exp.addEventListener("click", async (e) => {
+      const r = e.target.closest("[data-range]");
+      const x = e.target.closest("[data-export]");
+      const now = new Date();
+      if (r) {
+        const kind = r.dataset.range;
+        if (kind === "all") setRange("", "");
+        if (kind === "month") setRange(ymd(new Date(now.getFullYear(), now.getMonth(), 1)), ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0)));
+        if (kind === "prev") setRange(ymd(new Date(now.getFullYear(), now.getMonth() - 1, 1)), ymd(new Date(now.getFullYear(), now.getMonth(), 0)));
+      } else if (x) {
+        x.disabled = true;
+        try {
+          await downloadCsv(x.dataset.export);
+        } catch (err) {
+          fail(err);
+        } finally {
+          x.disabled = false;
+        }
+      }
+    });
 
     $("#status-chips").addEventListener("click", (e) => {
       const b = e.target.closest("[data-status]");

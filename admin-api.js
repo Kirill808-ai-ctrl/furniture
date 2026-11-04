@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { db, toProduct, categories } = require("./db");
+const { buildReport } = require("./report");
 
 const COOKIE = "hj_admin";
 const SESSION_MS = 8 * 60 * 60 * 1000;
@@ -198,6 +199,26 @@ module.exports = function createAdmin({ withImage, IMAGES_DIR, IMAGE_EXTS, MAX_P
         lines: itemsStmt.all(o.id),
       })),
     });
+  });
+
+  // Выгрузка для бухгалтерии: ?kind=orders|items &status= &from=ГГГГ-ММ-ДД &to=ГГГГ-ММ-ДД
+  router.get("/orders.csv", (req, res) => {
+    const one = (v) => (typeof v === "string" ? v : undefined);
+    const out = buildReport({
+      db,
+      categories,
+      kind: one(req.query.kind) ?? "orders",
+      status: one(req.query.status),
+      from: one(req.query.from),
+      to: one(req.query.to),
+    });
+    if (out.error) return res.status(400).json({ error: out.error });
+    res.set({
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${out.filename}"`,
+      "X-Rows": String(out.count),
+    });
+    res.send(out.csv);
   });
 
   router.patch("/orders/:id", express.json({ limit: "2kb" }), (req, res) => {

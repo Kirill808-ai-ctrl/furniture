@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem("theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Товар — HomeJoy</title>
   <meta name="description" content="Характеристики, цена и отзывы покупателей на мебель HomeJoy.">
@@ -22,6 +23,11 @@
     <section class="container" id="product"></section>
 
     <section class="container prod-reviews" id="reviews-wrap" hidden></section>
+
+    <section class="container" id="bundle-wrap" hidden>
+      <h2>С этим покупают</h2>
+      <div class="products" id="bundle"></div>
+    </section>
 
     <section class="container" id="related-wrap" hidden>
       <h2>Похожие товары</h2>

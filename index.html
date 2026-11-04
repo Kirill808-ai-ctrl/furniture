@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem("theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HomeJoy — интернет-магазин мебели</title>
   <meta name="description" content="Диваны, кровати, столы, стулья и шкафы из натуральных материалов. Соберите комнату в конструкторе, гарантия до 3 лет, сборка в подарок.">
@@ -44,17 +45,19 @@
       </div>
     </section>
 
-    <section class="section container builder" id="builder">
-      <div class="section__head">
-        <div>
-          <span class="eyebrow">Конструктор</span>
-          <h2>Собери свою комнату</h2>
-          <p class="section__sub">Красьте стены, меняйте пол и расставляйте мебель — клик по предмету в комнате меняет модель. Понравилось? Забирайте всё сразу.</p>
+    <section class="builder-band">
+      <div class="container builder" id="builder">
+        <div class="section__head">
+          <div>
+            <span class="eyebrow">Конструктор</span>
+            <h2>Собери свою комнату</h2>
+            <p class="section__sub">Подберите цвет стен и пол, расставьте мебель — клик по предмету в комнате меняет модель. Понравилось? Заберите всё сразу.</p>
+          </div>
         </div>
+        <div class="builder__stage" id="room"></div>
+        <div class="builder__panel" id="room-panel"></div>
+        <div class="builder__bar" id="room-bar"></div>
       </div>
-      <div class="builder__stage" id="room"></div>
-      <div class="builder__panel" id="room-panel"></div>
-      <div class="builder__bar" id="room-bar"></div>
     </section>
 
     <section class="section container">
@@ -67,15 +70,38 @@
       <div class="categories__grid" id="home-categories"></div>
     </section>
 
-    <section class="section container">
+    <section class="section container" id="hits">
       <div class="section__head">
         <div>
           <span class="eyebrow">Бестселлеры</span>
-          <h2>Популярные товары</h2>
+          <h2>Хиты продаж</h2>
         </div>
-        <a href="catalog.html" class="link-arrow">Весь каталог →</a>
+        <div class="section__tools">
+          <a href="catalog.html" class="link-arrow">Весь каталог →</a>
+          <div class="carousel__nav">
+            <button class="carousel__btn" type="button" data-carousel="featured" data-dir="-1" aria-label="Назад" disabled>←</button>
+            <button class="carousel__btn" type="button" data-carousel="featured" data-dir="1" aria-label="Вперёд">→</button>
+          </div>
+        </div>
       </div>
-      <div class="products" id="featured"></div>
+      <div class="carousel" id="featured" role="region" aria-label="Хиты продаж" tabindex="0"></div>
+    </section>
+
+    <section class="section container" id="recent-section" hidden>
+      <div class="section__head">
+        <div>
+          <span class="eyebrow">Вы смотрели</span>
+          <h2>Недавно смотрели</h2>
+        </div>
+        <div class="section__tools">
+          <button class="link-btn" type="button" id="recent-clear">Очистить</button>
+          <div class="carousel__nav">
+            <button class="carousel__btn" type="button" data-carousel="recent" data-dir="-1" aria-label="Назад" disabled>←</button>
+            <button class="carousel__btn" type="button" data-carousel="recent" data-dir="1" aria-label="Вперёд">→</button>
+          </div>
+        </div>
+      </div>
+      <div class="carousel" id="recent" role="region" aria-label="Недавно смотрели" tabindex="0"></div>
     </section>
 
     <section class="container">
@@ -91,15 +117,31 @@
     </section>
 
     <section class="section container">
+      <div class="section__head">
+        <div>
+          <span class="eyebrow">Путь заказа</span>
+          <h2>Как мы работаем</h2>
+          <p class="section__sub">Четыре шага от идеи до готовой комнаты — без беготни по магазинам и без инструкций на 40 страниц.</p>
+        </div>
+      </div>
+      <ol class="steps">
+        <li class="step reveal-block" style="--c:var(--mint)"><span class="step__icon" data-icon="sofa"></span><span class="step__num">1</span><h3>Выбираете</h3><p>Соберите комнату в конструкторе или найдите мебель в каталоге: фильтры, поиск и сортировка по цене.</p></li>
+        <li class="step reveal-block" style="--c:var(--butter)"><span class="step__icon" data-icon="receipt"></span><span class="step__num">2</span><h3>Оформляете</h3><p>Заказ занимает пару минут. С промокодом JOY15 скидка 15% на первый заказ.</p></li>
+        <li class="step reveal-block" style="--c:var(--pink)"><span class="step__icon" data-icon="truck"></span><span class="step__num">3</span><h3>Получаете</h3><p>Привезём и поднимем на этаж. Доставка бесплатна от 30 000 ₽.</p></li>
+        <li class="step reveal-block" style="--c:var(--sky)"><span class="step__icon" data-icon="wrench"></span><span class="step__num">4</span><h3>Мастер собирает</h3><p>Сборка в подарок: мастер всё закрутит, а вам останется расставить книги.</p></li>
+      </ol>
+    </section>
+
+    <section class="section container">
       <div class="assembly" id="assembly"></div>
     </section>
 
     <section class="section container">
       <div class="advantages__grid">
-        <div class="adv reveal-block"><span class="adv__icon">🌳</span><h3>Натуральные материалы</h3><p>Массив дерева и безопасные покрытия.</p></div>
-        <div class="adv reveal-block"><span class="adv__icon">🚚</span><h3>Быстрая доставка</h3><p>Привезём и поднимем на этаж.</p></div>
-        <div class="adv reveal-block"><span class="adv__icon">🛡️</span><h3>Гарантия до 3 лет</h3><p>Заменим или починим бесплатно.</p></div>
-        <div class="adv reveal-block"><span class="adv__icon">🔧</span><h3>Сборка под ключ</h3><p>Мастера соберут мебель за вас.</p></div>
+        <div class="adv reveal-block"><span class="adv__icon" data-icon="leaf"></span><h3>Натуральные материалы</h3><p>Массив дерева и безопасные покрытия.</p></div>
+        <div class="adv reveal-block"><span class="adv__icon" data-icon="truck"></span><h3>Быстрая доставка</h3><p>Привезём и поднимем на этаж.</p></div>
+        <div class="adv reveal-block"><span class="adv__icon" data-icon="shield"></span><h3>Гарантия до 3 лет</h3><p>Заменим или починим бесплатно.</p></div>
+        <div class="adv reveal-block"><span class="adv__icon" data-icon="wrench"></span><h3>Сборка под ключ</h3><p>Мастера соберут мебель за вас.</p></div>
       </div>
     </section>
 

@@ -315,6 +315,8 @@ const PUBLIC_FILES = new Set([
   "about.html",
   "contacts.html",
   "checkout.html",
+  "wishlist.html",
+  "compare.html",
   "admin.html",
   "admin.js",
   "style.css",
@@ -328,7 +330,7 @@ const PUBLIC_FILES = new Set([
 const siteUrl = (req) => (process.env.SITE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
 
 app.get("/robots.txt", (req, res) => {
-  const lines = ["User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /checkout.html", "Disallow: /admin.html", `Sitemap: ${siteUrl(req)}/sitemap.xml`];
+  const lines = ["User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /checkout.html", "Disallow: /wishlist.html", "Disallow: /compare.html", "Disallow: /admin.html", `Sitemap: ${siteUrl(req)}/sitemap.xml`];
   res.type("text/plain").send(lines.join("\n") + "\n");
 });
 

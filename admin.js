@@ -192,11 +192,18 @@
               .map((l) => `<li><span>${esc(l.name)} × ${l.qty}</span><b>${fmt(l.price * l.qty)}</b></li>`)
               .join("");
             const tel = String(o.phone).replace(/[^\d+]/g, "");
+            const payLabel = { cash: "Наличными", card_on_delivery: "Картой при получении", card_online: "Картой онлайн" }[o.paymentMethod] || o.paymentMethod;
+            const payBadge = o.paymentStatus === "paid"
+              ? `<span class="adm-pay adm-pay--paid">${esc(payLabel)} · оплачено</span>`
+              : o.paymentStatus === "failed"
+                ? `<span class="adm-pay adm-pay--failed">${esc(payLabel)} · не оплачено</span>`
+                : `<span class="adm-pay">${esc(payLabel)} · ожидает</span>${o.paymentMethod !== "card_online" ? `<button class="btn btn--small" type="button" data-mark-paid="${o.id}">Отметить оплаченным</button>` : ""}`;
             return `
               <article class="adm-card adm-order">
                 <header class="adm-order__head">
                   <h3>Заказ № ${o.id}</h3>
                   <time>${when(o.createdAt)}</time>
+                  ${payBadge}
                   <select class="adm-status" data-order="${o.id}" data-status="${esc(o.status)}" aria-label="Статус заказа ${o.id}">${options}</select>
                 </header>
                 <div class="adm-order__body">
@@ -288,6 +295,19 @@
       } catch (err) {
         fail(err);
         renderTab();
+      }
+    });
+    $(".adm-list", body).addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-mark-paid]");
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+        await api("PATCH", `/orders/${btn.dataset.markPaid}/payment`, {});
+        toast(`Заказ № ${btn.dataset.markPaid}: оплата отмечена`);
+        renderTab();
+      } catch (err) {
+        fail(err);
+        btn.disabled = false;
       }
     });
   }

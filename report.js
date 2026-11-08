@@ -63,11 +63,13 @@ function cell(v) {
 
 const STATUS_NAMES = { new: "Новый", confirmed: "Подтверждён", shipped: "Отправлен", done: "Выполнен", cancelled: "Отменён" };
 const DELIVERY_NAMES = { courier: "Курьер", pickup: "Самовывоз" };
+const PAYMENT_METHOD_NAMES = { cash: "Наличными", card_on_delivery: "Картой при получении", card_online: "Картой онлайн" };
+const PAYMENT_STATUS_NAMES = { unpaid: "Ожидает оплаты", paid: "Оплачен", failed: "Не оплачен" };
 
 const KINDS = {
   orders: {
     file: "zakazy",
-    head: ["№ заказа", "Дата и время", "Статус", "Покупатель", "Телефон", "Email", "Получение", "Адрес доставки", "Промокод", "Комментарий", "Позиций", "Штук", "Сумма товаров, ₽", "Скидка, ₽", "Доставка, ₽", "Итого, ₽"],
+    head: ["№ заказа", "Дата и время", "Статус", "Покупатель", "Телефон", "Email", "Получение", "Адрес доставки", "Промокод", "Комментарий", "Позиций", "Штук", "Сумма товаров, ₽", "Скидка, ₽", "Доставка, ₽", "Итого, ₽", "Способ оплаты", "Статус оплаты"],
   },
   items: {
     file: "pozicii",
@@ -106,6 +108,7 @@ function buildReport({ db, categories, kind = "orders", status, from, to }) {
         o.id, formatDateTime(o.created_at), STATUS_NAMES[o.status] ?? o.status, o.name, o.phone, o.email,
         DELIVERY_NAMES[o.delivery] ?? o.delivery, o.address, o.promo, o.comment,
         o.positions, o.pieces, o.subtotal, o.discount, o.delivery_cost, o.total,
+        PAYMENT_METHOD_NAMES[o.payment_method] ?? o.payment_method, PAYMENT_STATUS_NAMES[o.payment_status] ?? o.payment_status,
       ]);
   } else {
     rows = db

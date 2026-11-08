@@ -103,6 +103,8 @@ const ICONS = {
   heartfill: '<path d="M12 20.5s-8-4.9-8-11A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8 2.5c0 6.1-8 11-8 11z"/>',
   download: '<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',
   party: '<path d="M4 20l4-11 7 7z"/><path d="M13 5v2M18 8h2M17 12l2 1M10 3l1 2"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4v-4H4z"/><path d="M8 10h8M8 13.5h5"/>',
+  send: '<path d="M4 12l16-8-6 8 6 8z"/>',
 };
 
 const icon = (name, cls = "") =>
@@ -175,6 +177,7 @@ function renderLayout() {
         <div>
           <h3>Разделы</h3>
           ${links.map(([href, label]) => `<a href="${href}">${label}</a>`).join("")}
+          <a href="track.html">Отследить заказ</a>
         </div>
         <div>
           <h3>Контакты</h3>
@@ -206,9 +209,25 @@ function renderLayout() {
       <div class="qv__box" id="qv-box"></div>
     </div>
     <div class="cmpbar" id="cmpbar" hidden></div>
-    <div class="toast" id="toast"></div>`
+    <div class="toast" id="toast"></div>
+    <button class="chat-toggle" id="chat-toggle" type="button" aria-expanded="false" aria-controls="chat-panel" aria-label="Чат с консультантом">${icon("chat")}</button>
+    <section class="chat-panel" id="chat-panel" hidden aria-label="Чат с консультантом">
+      <header class="chat-panel__head">
+        <div>
+          <h2>Консультант HomeJoy</h2>
+          <p>Отвечает ИИ, может ошибаться</p>
+        </div>
+        <button class="chat-panel__close" id="chat-close" type="button" aria-label="Закрыть чат">${icon("close")}</button>
+      </header>
+      <ul class="chat__list" id="chat-list"></ul>
+      <form class="chat__form" id="chat-form">
+        <input type="text" id="chat-input" placeholder="Спросите о мебели, доставке, заказе…" maxlength="600" autocomplete="off" aria-label="Сообщение">
+        <button class="chat__send" id="chat-send" type="submit" aria-label="Отправить">${icon("send")}</button>
+      </form>
+    </section>`
   );
   initIcons();
+  initChat();
 }
 
 /* ---------- Карточка товара ---------- */
@@ -412,7 +431,9 @@ function renderCmpBar() {
   const bar = $("#cmpbar");
   if (!bar) return;
   const items = cmp.map((id) => PRODUCTS.find((p) => p.id === id)).filter(Boolean);
-  if (document.body.dataset.page === "compare" || items.length === 0) {
+  const show = document.body.dataset.page !== "compare" && items.length > 0;
+  document.body.classList.toggle("has-cmpbar", show);
+  if (!show) {
     bar.hidden = true;
     return;
   }
@@ -433,6 +454,101 @@ const COMPLEMENTS = {
   shelf: ["sofa", "table"],
   tv: ["sofa", "shelf"],
 };
+
+/* ---------- ИИ-консультант ---------- */
+const CHAT_KEY = "hj_chat";
+const CHAT_GREETING = "Привет! Я помогу выбрать мебель, расскажу про доставку, гарантию и оформление заказа. Что вас интересует?";
+let chatHistory = [];
+try {
+  chatHistory = JSON.parse(sessionStorage.getItem(CHAT_KEY)) || [];
+} catch {
+  chatHistory = [];
+}
+let chatBusy = false;
+
+function saveChatHistory() {
+  try {
+    sessionStorage.setItem(CHAT_KEY, JSON.stringify(chatHistory.slice(-16)));
+  } catch {}
+}
+
+function chatBubbleHTML(role, text) {
+  const safe = escHTML(text).replace(/\n/g, "<br>");
+  return `<li class="chat__msg chat__msg--${role}">${safe}</li>`;
+}
+
+function openChat() {
+  const panel = $("#chat-panel");
+  panel.hidden = false;
+  $("#chat-toggle").setAttribute("aria-expanded", "true");
+  requestAnimationFrame(() => panel.classList.add("is-open"));
+  $("#chat-input").focus();
+  $("#chat-list").scrollTop = $("#chat-list").scrollHeight;
+}
+
+function closeChat() {
+  const panel = $("#chat-panel");
+  if (panel.hidden) return;
+  panel.classList.remove("is-open");
+  $("#chat-toggle").setAttribute("aria-expanded", "false");
+  setTimeout(() => (panel.hidden = true), 200);
+}
+
+async function sendChatMessage(text) {
+  const list = $("#chat-list");
+  chatHistory.push({ role: "user", text });
+  list.insertAdjacentHTML("beforeend", chatBubbleHTML("user", text));
+  saveChatHistory();
+
+  chatBusy = true;
+  $("#chat-input").value = "";
+  $("#chat-send").disabled = true;
+  list.insertAdjacentHTML("beforeend", '<li class="chat__msg chat__msg--assistant chat__msg--typing" id="chat-typing"><span></span><span></span><span></span></li>');
+  list.scrollTop = list.scrollHeight;
+
+  try {
+    const res = await fetch("/api/assistant/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: chatHistory.slice(-16) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    $("#chat-typing")?.remove();
+    const reply = res.ok ? data.reply : data.error || "Ассистент сейчас не отвечает. Попробуйте чуть позже.";
+    chatHistory.push({ role: "assistant", text: reply });
+    list.insertAdjacentHTML("beforeend", chatBubbleHTML("assistant", reply));
+    saveChatHistory();
+  } catch {
+    $("#chat-typing")?.remove();
+    list.insertAdjacentHTML("beforeend", chatBubbleHTML("assistant", "Не получилось связаться с сервером. Проверьте соединение и попробуйте ещё раз."));
+  } finally {
+    chatBusy = false;
+    $("#chat-send").disabled = false;
+    list.scrollTop = list.scrollHeight;
+  }
+}
+
+function initChat() {
+  const list = $("#chat-list");
+  if (chatHistory.length) {
+    list.innerHTML = chatHistory.map((m) => chatBubbleHTML(m.role, m.text)).join("");
+  } else {
+    list.innerHTML = chatBubbleHTML("assistant", CHAT_GREETING);
+  }
+  list.scrollTop = list.scrollHeight;
+
+  $("#chat-toggle").addEventListener("click", () => ($("#chat-panel").hidden ? openChat() : closeChat()));
+  $("#chat-close").addEventListener("click", closeChat);
+
+  const form = $("#chat-form");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = $("#chat-input");
+    const text = input.value.trim().slice(0, 600);
+    if (!text || chatBusy) return;
+    sendChatMessage(text);
+  });
+}
 
 /* ---------- Увеличение изображения ---------- */
 function openLightbox(p) {
@@ -581,6 +697,7 @@ function bindGlobalEvents() {
     if (e.key !== "Escape") return;
     closeQuick();
     closeCart();
+    closeChat();
     setNav(false);
   });
 
@@ -1465,6 +1582,13 @@ const pages = {
           <label id="address-wrap">Адрес доставки
             <input type="text" name="address" autocomplete="street-address" maxlength="300">
           </label>
+          <fieldset class="choice">
+            <legend>Оплата</legend>
+            <label><input type="radio" name="paymentMethod" value="card_online" checked> Картой онлайн</label>
+            <label><input type="radio" name="paymentMethod" value="cash"> Наличными при получении</label>
+            <label><input type="radio" name="paymentMethod" value="card_on_delivery"> Картой при получении</label>
+          </fieldset>
+          <p class="checkout__payhint" id="pay-hint">Переведёт на страницу оплаты (тестовый режим, карта не списывается по-настоящему).</p>
           <label>Комментарий (необязательно)
             <textarea name="comment" rows="3" maxlength="500"></textarea>
           </label>
@@ -1548,10 +1672,20 @@ const pages = {
       note.textContent = promo ? `Промокод ${promo.toUpperCase()} применён` : "";
     });
 
+    const PAY_HINTS = {
+      card_online: "Переведёт на страницу оплаты (тестовый режим, карта не списывается по-настоящему).",
+      cash: "Оплатите наличными курьеру или в магазине при получении.",
+      card_on_delivery: "Оплатите картой курьеру или в магазине при получении.",
+    };
+
     form.addEventListener("change", (e) => {
-      if (e.target.name !== "delivery") return;
-      $("#address-wrap").hidden = form.delivery.value === "pickup";
-      recalc();
+      if (e.target.name === "delivery") {
+        $("#address-wrap").hidden = form.delivery.value === "pickup";
+        recalc();
+      }
+      if (e.target.name === "paymentMethod") {
+        $("#pay-hint").textContent = PAY_HINTS[form.paymentMethod.value] ?? "";
+      }
     });
 
     form.addEventListener("submit", async (e) => {
@@ -1569,6 +1703,7 @@ const pages = {
       btn.disabled = true;
       btn.textContent = "Отправляем...";
       try {
+        const paymentMethod = f.get("paymentMethod");
         const order = await post("/api/orders", {
           ...payload(),
           name: f.get("name"),
@@ -1576,15 +1711,22 @@ const pages = {
           email: f.get("email"),
           address: f.get("address"),
           comment: f.get("comment"),
+          paymentMethod,
         });
         cart = [];
         renderCart();
+        if (order.payUrl) {
+          location.href = order.payUrl;
+          return;
+        }
+        const payNote = { cash: "Оплата наличными при получении.", card_on_delivery: "Оплата картой при получении." }[paymentMethod] ?? "";
         box.innerHTML = `
           <div class="thanks">
             <p class="thanks__emoji" aria-hidden="true">${icon("party")}</p>
             <h2>Заказ № ${order.id} принят!</h2>
-            <p>Сумма: <b>${fmt(order.total)}</b>. Мы позвоним вам по телефону в ближайшее время, чтобы подтвердить детали.</p>
+            <p>Сумма: <b>${fmt(order.total)}</b>. ${payNote} Мы позвоним вам по телефону в ближайшее время, чтобы подтвердить детали.</p>
             <a class="btn" href="catalog.html">Вернуться в каталог</a>
+            ${courier ? `<a class="link-btn" href="track.html?order=${order.id}">Отследить заказ на карте →</a>` : ""}
           </div>`;
         scrollTo({ top: 0, behavior: "smooth" });
       } catch (err) {
@@ -1604,6 +1746,206 @@ const pages = {
       e.target.reset();
       showToast("Сообщение отправлено. Мы скоро свяжемся с вами!");
     });
+  },
+
+  "payment-result"() {
+    const box = $("#payment-result-box");
+    const id = Number(params.get("orderId"));
+
+    if (!Number.isInteger(id) || id < 1) {
+      box.innerHTML = `<div class="status status--error"><p>Заказ не найден.</p><a class="btn" href="catalog.html">В каталог</a></div>`;
+      return;
+    }
+
+    box.innerHTML = `<p class="status">Проверяем статус оплаты…</p>`;
+
+    const render = (status) => {
+      if (status === "paid") {
+        box.innerHTML = `
+          <div class="thanks">
+            <p class="thanks__emoji" aria-hidden="true">${icon("check")}</p>
+            <h2>Оплата прошла успешно</h2>
+            <p>Заказ № ${id} оплачен. Мы позвоним вам в ближайшее время, чтобы подтвердить детали.</p>
+            <a class="btn" href="catalog.html">Вернуться в каталог</a>
+            <a class="link-btn" href="track.html?order=${id}">Отследить заказ на карте →</a>
+          </div>`;
+        return;
+      }
+      if (status === "failed") {
+        box.innerHTML = `
+          <div class="thanks">
+            <h2>Оплата не прошла</h2>
+            <p>Заказ № ${id} оформлен, но оплата картой не завершилась. Можно попробовать ещё раз или оплатить при получении — напишите нам на странице «Контакты».</p>
+            <button class="btn" id="pay-retry">Оплатить снова</button>
+            <a class="link-btn" href="catalog.html">Вернуться в каталог →</a>
+          </div>`;
+        $("#pay-retry").addEventListener("click", async (e) => {
+          e.target.disabled = true;
+          e.target.textContent = "Открываем оплату…";
+          try {
+            const res = await fetch(`/api/orders/${id}/pay-link`, { method: "POST" });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || "Не удалось открыть оплату");
+            location.href = data.payUrl;
+          } catch (err) {
+            showToast(err.message);
+            e.target.disabled = false;
+            e.target.textContent = "Оплатить снова";
+          }
+        });
+        return;
+      }
+      // unpaid: вебхук от банка мог ещё не дойти — подождём и проверим ещё раз
+      box.innerHTML = `<p class="status">Ждём подтверждения от банка…</p>`;
+    };
+
+    let attempts = 0;
+    async function poll() {
+      try {
+        const res = await fetch(`/api/orders/${id}/payment-status`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Заказ не найден");
+        render(data.status);
+        if (data.status === "unpaid" && attempts < 5) {
+          attempts++;
+          setTimeout(poll, 1500);
+        } else if (data.status === "unpaid") {
+          box.innerHTML = `<div class="status status--error"><p>Не удалось подтвердить оплату. Если деньги списались — напишите нам на странице «Контакты», указав номер заказа № ${id}.</p><a class="btn" href="contacts.html">Контакты</a></div>`;
+        }
+      } catch (err) {
+        box.innerHTML = `<div class="status status--error"><p>${err.message}</p><a class="btn" href="catalog.html">В каталог</a></div>`;
+      }
+    }
+    poll();
+  },
+
+  // Маршрут курьера на карте — «как в Яндекс.Такси», но это демонстрация: едет по настоящим дорогам (OSRM),
+  // а не по реальным координатам курьера — прогресс считается от времени с момента «Отправлен».
+  track() {
+    const box = $("#track-box");
+    const id = Number(params.get("order"));
+
+    const formHtml = (value = "") => `
+      <form class="track-form" id="track-form">
+        <label>Номер заказа
+          <input type="number" name="order" min="1" step="1" placeholder="Например, 16" value="${value || ""}" required>
+        </label>
+        <button class="btn" type="submit">Показать на карте</button>
+      </form>`;
+
+    const wireForm = () => {
+      $("#track-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const v = Number(new FormData(e.target).get("order"));
+        if (Number.isInteger(v) && v > 0) location.href = `track.html?order=${v}`;
+      });
+    };
+
+    if (!Number.isInteger(id) || id < 1) {
+      box.innerHTML = formHtml();
+      wireForm();
+      return;
+    }
+
+    box.innerHTML = `
+      ${formHtml(id)}
+      <p class="status" id="track-status">Загружаем маршрут…</p>
+      <div id="track-map" class="track-map" hidden></div>`;
+    wireForm();
+
+    const statusEl = $("#track-status");
+    const mapEl = $("#track-map");
+    let map, poly, courierMarker, pollTimer, raf, atProgress = 0;
+
+    const pin = (name, cls) =>
+      L.divIcon({
+        className: "",
+        html: `<span class="track-pin track-pin--${cls}">${icon(name)}</span>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      });
+
+    function pointAt(geometry, progress) {
+      const n = geometry.length - 1;
+      if (n <= 0) return geometry[0];
+      const pos = Math.min(n, Math.max(0, progress * n));
+      const i = Math.min(n - 1, Math.floor(pos));
+      const t = pos - i;
+      const [lat1, lng1] = geometry[i];
+      const [lat2, lng2] = geometry[i + 1];
+      return [lat1 + (lat2 - lat1) * t, lng1 + (lng2 - lng1) * t];
+    }
+
+    function animateTo(target, geometry) {
+      cancelAnimationFrame(raf);
+      const from = atProgress;
+      const start = performance.now();
+      const duration = 1200;
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        const p = from + (target - from) * t;
+        courierMarker.setLatLng(pointAt(geometry, p));
+        if (t < 1) raf = requestAnimationFrame(step);
+        else atProgress = target;
+      };
+      raf = requestAnimationFrame(step);
+    }
+
+    const PHASE_LABELS = {
+      preparing: "Заказ обрабатывается — курьер ещё не выехал.",
+      shipped: (eta) => `Курьер в пути. Обычно дорога занимает ~${Math.max(1, Math.round(eta / 60))} мин.`,
+      arrived: "Курьер должен быть у подъезда.",
+      done: "Заказ доставлен!",
+    };
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/orders/${id}/route`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Заказ не найден");
+
+        if (data.delivery === "pickup") {
+          statusEl.textContent = "Этот заказ оформлен с самовывозом — курьер не нужен, ждём вас в магазине.";
+          mapEl.hidden = true;
+          return;
+        }
+        if (data.phase === "cancelled") {
+          statusEl.textContent = "Заказ отменён.";
+          mapEl.hidden = true;
+          return;
+        }
+
+        mapEl.hidden = false;
+        if (!map) {
+          map = L.map(mapEl, { attributionControl: true, scrollWheelZoom: false });
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "© OpenStreetMap",
+          }).addTo(map);
+        }
+
+        if (!poly && data.geometry) {
+          poly = L.polyline(data.geometry, { color: "#2b4bff", weight: 4, opacity: 0.85 }).addTo(map);
+          L.marker(data.store, { icon: pin("sofa", "store") }).addTo(map).bindTooltip("Магазин HomeJoy");
+          L.marker(data.dest, { icon: pin("check", "dest") }).addTo(map).bindTooltip("Адрес доставки");
+          atProgress = data.phase === "preparing" ? 0 : data.progress;
+          courierMarker = L.marker(pointAt(data.geometry, atProgress), { icon: pin("truck", "courier") }).addTo(map);
+          map.fitBounds(L.latLngBounds([data.store, data.dest]), { padding: [30, 30] });
+        }
+
+        const label = PHASE_LABELS[data.phase];
+        statusEl.textContent = typeof label === "function" ? label(data.etaSeconds) : label ?? "";
+
+        if (data.phase !== "preparing" && poly) animateTo(data.progress, data.geometry);
+
+        clearTimeout(pollTimer);
+        if (data.phase === "shipped") pollTimer = setTimeout(poll, 5000);
+      } catch (err) {
+        statusEl.textContent = err.message;
+        mapEl.hidden = true;
+      }
+    }
+    poll();
   },
 };
 

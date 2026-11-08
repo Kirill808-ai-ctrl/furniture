@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <script>try{if(localStorage.getItem("theme")==="dark")document.documentElement.dataset.theme="dark"}catch(e){}</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Отследить заказ — HomeJoy</title>
+  <meta name="description" content="Карта с маршрутом доставки заказа HomeJoy.">
+  <meta name="theme-color" content="#FFD23F">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="track">
+
+  <div id="site-header"></div>
+
+  <main>
+    <div class="page-head">
+      <div class="container">
+        <h1>Отследить заказ</h1>
+        <p>Введите номер заказа — покажем на карте, где курьер и когда ждать доставку</p>
+      </div>
+    </div>
+
+    <section class="section container" id="track-box"></section>
+  </main>
+
+  <div id="site-footer"></div>
+
+  <script src="images.js"></script>
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,14 +1,22 @@
+require("dotenv").config();
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { db, seedIfEmpty, addMissingProducts, toProduct, categories } = require("./db");
 const createAdmin = require("./admin-api");
+const createAssistant = require("./assistant-api");
+const { paymentSecret, sign, verify } = require("./payments");
+const createMockBank = require("./mock-bank/router");
+const delivery = require("./delivery");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Фото товаров: положите images/<id>.jpg (или .png/.webp) — и API отдаст поле image
-const IMAGES_DIR = path.join(__dirname, "images");
+// Фото товаров: положите images/<id>.jpg (или .png/.webp) — и API отдаст поле image.
+// На хостинге с постоянным диском можно вынести папку туда: IMAGES_DIR=/var/data/images
+// (иначе фото, загруженные через админку, пропадут при пересоздании контейнера — как и база без DB_PATH).
+const IMAGES_DIR = process.env.IMAGES_DIR || path.join(__dirname, "images");
+fs.mkdirSync(IMAGES_DIR, { recursive: true });
 const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp"];
 
 // Основное фото — <id>.jpg, дополнительные для галереи — <id>-2.jpg, <id>-3.jpg … (до 6 штук)
@@ -44,14 +52,38 @@ app.disable("x-powered-by");
 // За прокси хостинга (Render, Railway, nginx) задайте TRUST_PROXY=1, чтобы видеть настоящий IP клиента
 if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || true);
 
+// CSP: разрешены только свои файлы, шрифты Google Fonts, карта Google Maps на странице контактов
+// и тайлы OpenStreetMap для карты маршрута на странице отслеживания заказа (/track.html).
+// script-src 'unsafe-inline' — ради крошечного инлайн-скрипта выбора темы в <head> (без него тема мигала бы
+// при загрузке); сторонних и тем более пользовательских скриптов на сайте нет.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: https://*.tile.openstreetmap.org",
+  "connect-src 'self'",
+  "frame-src https://www.google.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+].join("; ");
+
 app.use((req, res, next) => {
   res.set({
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "SAMEORIGIN",
     "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Content-Security-Policy": CSP,
+    "Permissions-Policy": "geolocation=(), camera=(), microphone=(), payment=()",
+    "Strict-Transport-Security": "max-age=15552000; includeSubDomains",
   });
   next();
 });
+
+// Адрес сайта для sitemap и для ссылки возврата из MOCK-банка: SITE_URL=https://example.com (иначе из запроса)
+const siteUrl = (req) => (process.env.SITE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
 
 /* ---------- API ---------- */
 const api = express.Router();
@@ -196,6 +228,36 @@ const FREE_DELIVERY_FROM = 30000;
 const DELIVERY_PRICE = 1500;
 const MAX_QTY = 20;
 
+/* ---------- Оплата ---------- */
+// "card_online" уходит на MOCK-банк (см. mock-bank/) — демо-имитацию приёма карты. Деньги не настоящие,
+// это учебный пример интеграции с платёжным шлюзом (редирект + подписанное подтверждение).
+// По умолчанию банк встроен в этот же процесс на /bank (см. монтирование роутера ниже) — один сервис,
+// одна публичная ссылка, удобно для хостинга. BANK_URL можно задать, только если банк поднят отдельно.
+const PAYMENT_METHODS = { cash: "Наличными при получении", card_on_delivery: "Картой при получении", card_online: "Картой онлайн" };
+const BANK_URL = process.env.BANK_URL ? process.env.BANK_URL.replace(/\/+$/, "") : "";
+const SECRET = paymentSecret(path.join(__dirname, "data"));
+
+function buildPayUrl(req, orderId, amount) {
+  const returnUrl = `${siteUrl(req)}/payment-result.html?orderId=${orderId}`;
+  const sig = sign(SECRET, [String(orderId), String(amount)]);
+  const params = new URLSearchParams({ orderId: String(orderId), amount: String(amount), returnUrl, sig });
+  const bankBase = BANK_URL || `${siteUrl(req)}/bank`;
+  return `${bankBase}/pay?${params}`;
+}
+
+// Не больше 5 оформленных заказов в 10 минут с одного адреса — защита от спама и перебора промокодов
+const orderHits = new Map();
+function tooManyOrders(ip) {
+  const now = Date.now();
+  const recent = (orderHits.get(ip) ?? []).filter((t) => now - t < 10 * 60_000);
+  if (recent.length >= 5) {
+    orderHits.set(ip, recent);
+    return true;
+  }
+  orderHits.set(ip, [...recent, now]);
+  return false;
+}
+
 // Считает заказ по ценам из базы — цены и скидки от клиента не принимаются
 function priceOrder(body) {
   const { items, promo, delivery } = body ?? {};
@@ -248,6 +310,9 @@ api.post("/orders/quote", express.json({ limit: "20kb" }), (req, res) => {
 });
 
 api.post("/orders", express.json({ limit: "20kb" }), (req, res) => {
+  if (tooManyOrders(req.ip)) {
+    return res.status(429).json({ error: "Слишком много заказов подряд. Попробуйте через несколько минут." });
+  }
   const body = req.body ?? {};
   const result = priceOrder(body);
   if (result.error) return res.status(400).json({ error: result.error });
@@ -258,7 +323,9 @@ api.post("/orders", express.json({ limit: "20kb" }), (req, res) => {
   const email = text(body.email, 100);
   const address = text(body.address, 300);
   const comment = text(body.comment, 500);
+  const paymentMethod = typeof body.paymentMethod === "string" ? body.paymentMethod : "";
 
+  if (!(paymentMethod in PAYMENT_METHODS)) return res.status(400).json({ error: "Выберите способ оплаты" });
   if (name.length < 2) return res.status(400).json({ error: "Укажите имя" });
   const digits = phone.replace(/\D/g, "");
   if (digits.length < 10 || digits.length > 15) {
@@ -272,8 +339,8 @@ api.post("/orders", express.json({ limit: "20kb" }), (req, res) => {
   }
 
   const insertOrder = db.prepare(`
-    INSERT INTO orders (name, phone, email, delivery, address, comment, promo, subtotal, discount, delivery_cost, total)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO orders (name, phone, email, delivery, address, comment, promo, subtotal, discount, delivery_cost, total, payment_method)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertItem = db.prepare(
     "INSERT INTO order_items (order_id, product_id, name, price, qty) VALUES (?, ?, ?, ?, ?)"
@@ -290,14 +357,146 @@ api.post("/orders", express.json({ limit: "20kb" }), (req, res) => {
       result.subtotal,
       result.discount,
       result.deliveryCost,
-      result.total
+      result.total,
+      paymentMethod
     );
     for (const l of result.items) insertItem.run(lastInsertRowid, l.id, l.name, l.price, l.qty);
     return Number(lastInsertRowid);
   })();
 
-  res.status(201).json({ id: orderId, total: result.total });
+  const payUrl = paymentMethod === "card_online" ? buildPayUrl(req, orderId, result.total) : undefined;
+  res.status(201).json({ id: orderId, total: result.total, ...(payUrl && { payUrl }) });
 });
+
+/* ---------- Оплата: вебхук от MOCK-банка, статус, повторная ссылка ---------- */
+// Не больше 30 проверок статуса за 10 минут с одного адреса — страница результата опрашивает редко
+const payHits = new Map();
+function tooManyPayHits(ip) {
+  const now = Date.now();
+  const recent = (payHits.get(ip) ?? []).filter((t) => now - t < 10 * 60_000);
+  if (recent.length >= 30) {
+    payHits.set(ip, recent);
+    return true;
+  }
+  payHits.set(ip, [...recent, now]);
+  return false;
+}
+
+// Применяет результат оплаты к заказу — авторитетно, в обход браузера. Статус в базе меняется только
+// отсюда: ни редирект браузера обратно на сайт, ни query-параметры сами по себе ничего не решают.
+// Используется и HTTP-вебхуком ниже (для отдельно запущенного MOCK-банка), и напрямую — когда MOCK-банк
+// встроен в этот же процесс роутером mock-bank/router.js (см. его подключение на /bank ниже).
+function applyPaymentResult({ orderId, amount, status, txnId }) {
+  const order = db.prepare("SELECT id, total, payment_method FROM orders WHERE id = ?").get(orderId);
+  if (!order) return { ok: false, error: "Заказ не найден" };
+  if (order.payment_method !== "card_online") return { ok: false, error: "У заказа другой способ оплаты" };
+  if (amount !== order.total) return { ok: false, error: "Сумма не совпадает с заказом" };
+
+  const paymentStatus = status === "success" ? "paid" : "failed";
+  db.prepare("UPDATE orders SET payment_status = ?, payment_txn_id = ?, status = CASE WHEN ? = 'paid' AND status = 'new' THEN 'confirmed' ELSE status END WHERE id = ?").run(
+    paymentStatus,
+    txnId ?? null,
+    paymentStatus,
+    orderId
+  );
+  return { ok: true };
+}
+
+// Вебхук для отдельно запущенного MOCK-банка (mock-bank/server.js, свой процесс/порт) — подписанный
+// запрос сервер-сервер, не из браузера. Когда банк встроен в этот же процесс (по умолчанию, /bank),
+// этот адрес не используется — applyPaymentResult вызывается напрямую.
+api.post("/payments/callback", express.json({ limit: "5kb" }), (req, res) => {
+  const b = req.body ?? {};
+  const orderId = Number(b.orderId);
+  const amount = Number(b.amount);
+  const status = b.status;
+  const txnId = typeof b.txnId === "string" ? b.txnId.slice(0, 100) : null;
+
+  if (!Number.isInteger(orderId) || !Number.isFinite(amount) || (status !== "success" && status !== "failed")) {
+    return res.status(400).json({ error: "Некорректное тело запроса" });
+  }
+  if (!verify(SECRET, [String(orderId), String(amount), status, String(txnId)], b.sig)) {
+    return res.status(403).json({ error: "Неверная подпись" });
+  }
+
+  const result = applyPaymentResult({ orderId, amount, status, txnId });
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
+});
+
+// Для страницы «payment-result.html»: только статус, без персональных данных заказа
+api.get("/orders/:id/payment-status", (req, res) => {
+  if (tooManyPayHits(req.ip)) return res.status(429).json({ error: "Слишком много запросов" });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Некорректный номер заказа" });
+  const order = db.prepare("SELECT payment_method, payment_status FROM orders WHERE id = ?").get(id);
+  if (!order) return res.status(404).json({ error: "Заказ не найден" });
+  res.json({ method: order.payment_method, status: order.payment_status });
+});
+
+// Повторная оплата, если прошлая попытка сорвалась
+api.post("/orders/:id/pay-link", (req, res) => {
+  if (tooManyPayHits(req.ip)) return res.status(429).json({ error: "Слишком много запросов" });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Некорректный номер заказа" });
+  const order = db.prepare("SELECT id, total, payment_method, payment_status FROM orders WHERE id = ?").get(id);
+  if (!order) return res.status(404).json({ error: "Заказ не найден" });
+  if (order.payment_method !== "card_online") return res.status(400).json({ error: "У заказа другой способ оплаты" });
+  if (order.payment_status === "paid") return res.status(400).json({ error: "Заказ уже оплачен" });
+  res.json({ payUrl: buildPayUrl(req, order.id, order.total) });
+});
+
+/* ---------- Трек доставки: курьер «едет» по настоящей дороге (OSRM), но это демонстрация, не GPS ---------- */
+api.get("/orders/:id/route", async (req, res) => {
+  if (tooManyPayHits(req.ip)) return res.status(429).json({ error: "Слишком много запросов" });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Некорректный номер заказа" });
+  const order = db
+    .prepare("SELECT id, status, delivery, address, dest_lat, dest_lng, shipped_at FROM orders WHERE id = ?")
+    .get(id);
+  if (!order) return res.status(404).json({ error: "Заказ не найден" });
+
+  if (order.delivery !== "courier") {
+    return res.json({ delivery: "pickup", store: [delivery.STORE.lat, delivery.STORE.lng] });
+  }
+  if (order.status === "cancelled") return res.json({ delivery: "courier", phase: "cancelled" });
+
+  let dest = order.dest_lat != null && order.dest_lng != null ? { lat: order.dest_lat, lng: order.dest_lng } : null;
+  if (!dest) {
+    dest = await delivery.geocode(order.address || "");
+    if (!dest) return res.status(502).json({ error: "Не удалось определить точку на карте по адресу" });
+    db.prepare("UPDATE orders SET dest_lat = ?, dest_lng = ? WHERE id = ?").run(dest.lat, dest.lng, id);
+  }
+
+  const r = await delivery.route(delivery.STORE, dest);
+  if (!r) return res.status(502).json({ error: "Не удалось построить маршрут" });
+
+  let phase = "preparing";
+  let progress = 0;
+  if (order.status === "shipped" || order.status === "done") {
+    if (order.status === "done") {
+      phase = "done";
+      progress = 1;
+    } else {
+      const elapsed = order.shipped_at ? Date.now() - new Date(order.shipped_at.replace(" ", "T") + "Z").getTime() : 0;
+      progress = Math.min(1, Math.max(0, elapsed / delivery.DEMO_TRIP_MS));
+      phase = progress >= 1 ? "arrived" : "shipped";
+    }
+  }
+
+  res.json({
+    delivery: "courier",
+    phase,
+    progress,
+    etaSeconds: r.durationSec,
+    store: [delivery.STORE.lat, delivery.STORE.lng],
+    dest: [dest.lat, dest.lng],
+    geometry: r.geometry,
+  });
+});
+
+const assistant = createAssistant({ db, categories, promo: PROMOS, freeDeliveryFrom: FREE_DELIVERY_FROM, deliveryPrice: DELIVERY_PRICE });
+api.use("/assistant", assistant.router);
 
 api.use("/admin", admin.router);
 
@@ -315,6 +514,8 @@ const PUBLIC_FILES = new Set([
   "about.html",
   "contacts.html",
   "checkout.html",
+  "payment-result.html",
+  "track.html",
   "wishlist.html",
   "compare.html",
   "admin.html",
@@ -326,11 +527,8 @@ const PUBLIC_FILES = new Set([
   "favicon.svg",
 ]);
 
-// Адрес сайта для sitemap: SITE_URL=https://example.com (иначе берётся из запроса)
-const siteUrl = (req) => (process.env.SITE_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
-
 app.get("/robots.txt", (req, res) => {
-  const lines = ["User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /checkout.html", "Disallow: /wishlist.html", "Disallow: /compare.html", "Disallow: /admin.html", `Sitemap: ${siteUrl(req)}/sitemap.xml`];
+  const lines = ["User-agent: *", "Allow: /", "Disallow: /api/", "Disallow: /bank", "Disallow: /checkout.html", "Disallow: /payment-result.html", "Disallow: /track.html", "Disallow: /wishlist.html", "Disallow: /compare.html", "Disallow: /admin.html", `Sitemap: ${siteUrl(req)}/sitemap.xml`];
   res.type("text/plain").send(lines.join("\n") + "\n");
 });
 
@@ -344,6 +542,15 @@ app.get("/sitemap.xml", (req, res) => {
 });
 
 app.use("/images", express.static(IMAGES_DIR, { index: false, dotfiles: "deny" }));
+// Leaflet для карты маршрута на /track.html — отдаём прямо из node_modules, без отдельной копии файлов
+app.use(
+  "/vendor/leaflet",
+  express.static(path.join(__dirname, "node_modules", "leaflet", "dist"), { index: false, dotfiles: "deny" })
+);
+// MOCK-банк, встроенный в этот же процесс (см. mock-bank/router.js): applyPaymentResult применяет
+// результат оплаты напрямую, без сетевого вебхука — оба «сервиса» живут в одном процессе.
+app.use("/bank", createMockBank({ secret: SECRET, basePath: "/bank", applyResult: applyPaymentResult }));
+
 app.get("/",(req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/:file", (req, res, next) => {
   if (!PUBLIC_FILES.has(req.params.file)) return next();

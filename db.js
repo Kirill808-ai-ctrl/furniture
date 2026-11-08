@@ -39,7 +39,10 @@ db.exec(`
     subtotal     INTEGER NOT NULL,
     discount     INTEGER NOT NULL,
     delivery_cost INTEGER NOT NULL,
-    total        INTEGER NOT NULL
+    total        INTEGER NOT NULL,
+    payment_method TEXT NOT NULL DEFAULT 'cash',
+    payment_status TEXT NOT NULL DEFAULT 'unpaid',
+    payment_txn_id TEXT
   );
   CREATE TABLE IF NOT EXISTS order_items (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +53,17 @@ db.exec(`
     qty        INTEGER NOT NULL
   );
 `);
+
+// Миграция: в базах, созданных до появления оплаты, этих колонок ещё нет — CREATE TABLE IF NOT EXISTS их не добавит
+{
+  const cols = new Set(db.prepare("PRAGMA table_info(orders)").all().map((c) => c.name));
+  if (!cols.has("payment_method")) db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cash'");
+  if (!cols.has("payment_status")) db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid'");
+  if (!cols.has("payment_txn_id")) db.exec("ALTER TABLE orders ADD COLUMN payment_txn_id TEXT");
+  if (!cols.has("dest_lat")) db.exec("ALTER TABLE orders ADD COLUMN dest_lat REAL");
+  if (!cols.has("dest_lng")) db.exec("ALTER TABLE orders ADD COLUMN dest_lng REAL");
+  if (!cols.has("shipped_at")) db.exec("ALTER TABLE orders ADD COLUMN shipped_at TEXT");
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS reviews (

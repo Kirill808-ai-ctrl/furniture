@@ -196,6 +196,8 @@ module.exports = function createAdmin({ withImage, IMAGES_DIR, IMAGE_EXTS, MAX_P
         discount: o.discount,
         deliveryCost: o.delivery_cost,
         total: o.total,
+        paymentMethod: o.payment_method,
+        paymentStatus: o.payment_status,
         lines: itemsStmt.all(o.id),
       })),
     });
@@ -224,8 +226,22 @@ module.exports = function createAdmin({ withImage, IMAGES_DIR, IMAGE_EXTS, MAX_P
   router.patch("/orders/:id", express.json({ limit: "2kb" }), (req, res) => {
     const status = req.body?.status;
     if (!(typeof status === "string" && status in ORDER_STATUSES)) return res.status(400).json({ error: "Неизвестный статус" });
-    const { changes } = db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, Number(req.params.id));
+    // shipped_at ставится один раз — от него отсчитывается анимация курьера на /track.html
+    const { changes } = db
+      .prepare("UPDATE orders SET status = ?, shipped_at = CASE WHEN ? = 'shipped' AND shipped_at IS NULL THEN datetime('now') ELSE shipped_at END WHERE id = ?")
+      .run(status, status, Number(req.params.id));
     if (!changes) return res.status(404).json({ error: "Заказ не найден" });
+    res.json({ ok: true });
+  });
+
+  // Ручная отметка «оплачено» для наличных/оплаты при получении — картой онлайн статус ставит только вебхук банка
+  router.patch("/orders/:id/payment", express.json({ limit: "1kb" }), (req, res) => {
+    const order = db.prepare("SELECT id, payment_method FROM orders WHERE id = ?").get(Number(req.params.id));
+    if (!order) return res.status(404).json({ error: "Заказ не найден" });
+    if (order.payment_method === "card_online") {
+      return res.status(400).json({ error: "Статус оплаты картой онлайн меняет только банк" });
+    }
+    db.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").run(order.id);
     res.json({ ok: true });
   });
 

@@ -452,7 +452,7 @@ api.get("/orders/:id/route", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: "Некорректный номер заказа" });
   const order = db
-    .prepare("SELECT id, status, delivery, address, dest_lat, dest_lng, shipped_at FROM orders WHERE id = ?")
+    .prepare("SELECT id, status, delivery, address, dest_lat, dest_lng, created_at FROM orders WHERE id = ?")
     .get(id);
   if (!order) return res.status(404).json({ error: "Заказ не найден" });
 
@@ -471,15 +471,18 @@ api.get("/orders/:id/route", async (req, res) => {
   const r = await delivery.route(delivery.STORE, dest);
   if (!r) return res.status(502).json({ error: "Не удалось построить маршрут" });
 
+  // Курьер «выезжает» автоматически сам, без участия администратора: недолгая сборка заказа
+  // (delivery.PREP_MS) сразу после оформления, затем демо-поездка (delivery.DEMO_TRIP_MS) —
+  // отсчёт идёт от created_at, так что движение на /track.html видно сразу после заказа.
   let phase = "preparing";
   let progress = 0;
-  if (order.status === "shipped" || order.status === "done") {
-    if (order.status === "done") {
-      phase = "done";
-      progress = 1;
-    } else {
-      const elapsed = order.shipped_at ? Date.now() - new Date(order.shipped_at.replace(" ", "T") + "Z").getTime() : 0;
-      progress = Math.min(1, Math.max(0, elapsed / delivery.DEMO_TRIP_MS));
+  if (order.status === "done") {
+    phase = "done";
+    progress = 1;
+  } else {
+    const elapsed = Date.now() - new Date(order.created_at.replace(" ", "T") + "Z").getTime();
+    if (elapsed >= delivery.PREP_MS) {
+      progress = Math.min(1, (elapsed - delivery.PREP_MS) / delivery.DEMO_TRIP_MS);
       phase = progress >= 1 ? "arrived" : "shipped";
     }
   }

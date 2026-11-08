@@ -1939,7 +1939,7 @@ const pages = {
         if (data.phase !== "preparing" && poly) animateTo(data.progress, data.geometry);
 
         clearTimeout(pollTimer);
-        if (data.phase === "shipped") pollTimer = setTimeout(poll, 5000);
+        if (data.phase === "preparing" || data.phase === "shipped") pollTimer = setTimeout(poll, 5000);
       } catch (err) {
         statusEl.textContent = err.message;
         mapEl.hidden = true;

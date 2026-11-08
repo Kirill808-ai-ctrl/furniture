@@ -226,10 +226,9 @@ module.exports = function createAdmin({ withImage, IMAGES_DIR, IMAGE_EXTS, MAX_P
   router.patch("/orders/:id", express.json({ limit: "2kb" }), (req, res) => {
     const status = req.body?.status;
     if (!(typeof status === "string" && status in ORDER_STATUSES)) return res.status(400).json({ error: "Неизвестный статус" });
-    // shipped_at ставится один раз — от него отсчитывается анимация курьера на /track.html
-    const { changes } = db
-      .prepare("UPDATE orders SET status = ?, shipped_at = CASE WHEN ? = 'shipped' AND shipped_at IS NULL THEN datetime('now') ELSE shipped_at END WHERE id = ?")
-      .run(status, status, Number(req.params.id));
+    // Статус — для учёта в админке; анимация курьера на /track.html идёт сама по себе, от времени
+    // оформления заказа (см. /api/orders/:id/route), и ручного перевода в «Отправлен» не требует.
+    const { changes } = db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, Number(req.params.id));
     if (!changes) return res.status(404).json({ error: "Заказ не найден" });
     res.json({ ok: true });
   });
